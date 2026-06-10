@@ -1,0 +1,6 @@
+{
+  "name": "Bird Sample",
+  "description": "Plataforma de muestreo ambiental offline para inventarios de aves con formularios dinámicos, posicionamiento GPS, mapas locales y asistente inteligente IA Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
