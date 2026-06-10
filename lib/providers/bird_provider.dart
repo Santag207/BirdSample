@@ -1,10 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/bird_repository.dart';
 import '../services/gemini_service.dart';
-import '../services/location_service.dart';
 
 class BirdProvider with ChangeNotifier {
   final BirdRepository _repository = BirdRepository();

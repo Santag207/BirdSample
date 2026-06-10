@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/bird_provider.dart';
-import '../../models/models.dart';
 
 class SyncScreen extends StatefulWidget {
   const SyncScreen({super.key});
@@ -17,7 +16,6 @@ class _SyncScreenState extends State<SyncScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BirdProvider>();
-    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Sincronización Cloud')),
@@ -26,7 +24,7 @@ class _SyncScreenState extends State<SyncScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Central de Sincronización', style: TextStyle(fontWeight: FontWeight.black, fontSize: 18)),
+            const Text('Central de Sincronización', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
             const Text('Carga tus datos de forma incremental.', style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 16),
             _buildSyncControl(context, provider),

@@ -24,7 +24,7 @@ class ReportService {
         pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
           return pw.Column(
-            cross: pw.CrossAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text('BIRD SAMPLE ENGINE', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey600)),
               pw.SizedBox(height: 20),
@@ -37,7 +37,7 @@ class ReportService {
                   border: pw.Border.all(color: PdfColors.green100, width: 2),
                 ),
                 child: pw.Column(
-                  cross: pw.CrossAxisAlignment.start,
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text('PROYECTO: ${project.name}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.green900)),
                     pw.Text('Cliente: ${project.client}'),
@@ -147,7 +147,9 @@ class ReportService {
     final zipData = ZipEncoder().encode(archive);
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/Session_${session.id}_Export.zip');
-    await file.writeAsBytes(zipData!);
+    if (zipData != null) {
+      await file.writeAsBytes(zipData);
+    }
     return file;
   }
 

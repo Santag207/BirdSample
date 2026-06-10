@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'project_list_screen.dart';
-import 'offline_map_screen.dart';
 import 'sync_screen.dart';
 import 'gemini_assistant_screen.dart';
 import 'sampling_wizard_screen.dart';
