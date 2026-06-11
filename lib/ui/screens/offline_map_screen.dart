@@ -43,6 +43,7 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                         panOffset: _panOffset,
                         sites: provider.selectedProjectSites,
                         observations: provider.allObservations,
+                        sessions: provider.sessions,
                       ),
                       child: Container(),
                     ),
@@ -95,11 +96,13 @@ class MapPainter extends CustomPainter {
   final Offset panOffset;
   final List<Site> sites;
   final List<Observation> observations;
+  final List<SamplingSession> sessions;
 
   MapPainter({
     required this.panOffset,
     required this.sites,
     required this.observations,
+    required this.sessions,
   });
 
   @override
@@ -136,6 +139,16 @@ class MapPainter extends CustomPainter {
       final dx = center.dx + (obs.longitude + 74.0721) * 1004 + panOffset.dx;
       final dy = center.dy - (obs.latitude - 4.7110) * 1004 + panOffset.dy;
       canvas.drawCircle(Offset(dx, dy), 6, obsPaint);
+    }
+
+    // 5. Sampling Sessions (Blue Dots)
+    final sessionPaint = Paint()..color = Colors.blue;
+    for (var session in sessions) {
+      if (session.latitude != 0 && session.longitude != 0) {
+        final dx = center.dx + (session.longitude + 74.0721) * 1002 + panOffset.dx;
+        final dy = center.dy - (session.latitude - 4.7110) * 1002 + panOffset.dy;
+        canvas.drawCircle(Offset(dx, dy), 7, sessionPaint);
+      }
     }
   }
 

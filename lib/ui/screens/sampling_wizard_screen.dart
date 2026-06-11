@@ -9,6 +9,7 @@ import '../../models/models.dart';
 import '../../services/report_service.dart';
 import '../../services/media_service.dart';
 import '../../services/gemini_service.dart';
+import '../../services/location_service.dart';
 import '../../data/species_catalog.dart';
 
 class SamplingWizardScreen extends StatefulWidget {
@@ -32,6 +33,18 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
   final _ecosystemController = TextEditingController();
   final _observerController = TextEditingController();
   final _notesController = TextEditingController();
+  final _weatherController = TextEditingController();
+  final _tempController = TextEditingController();
+  final _humController = TextEditingController();
+  final _methodController = TextEditingController();
+
+  final _spCommonNameController = TextEditingController();
+  final _spScientificNameController = TextEditingController();
+  final _spCountController = TextEditingController();
+  final _spBehaviorController = TextEditingController();
+  final _spSexAgeController = TextEditingController();
+  final _spNotesController = TextEditingController();
+  double _lat = 0, _lon = 0, _alt = 0;
 
   final MediaService _mediaService = MediaService();
 
@@ -45,6 +58,16 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
     _ecosystemController.dispose();
     _observerController.dispose();
     _notesController.dispose();
+    _weatherController.dispose();
+    _tempController.dispose();
+    _humController.dispose();
+    _methodController.dispose();
+    _spCommonNameController.dispose();
+    _spScientificNameController.dispose();
+    _spCountController.dispose();
+    _spBehaviorController.dispose();
+    _spSexAgeController.dispose();
+    _spNotesController.dispose();
     super.dispose();
   }
 
@@ -59,6 +82,13 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
       _ecosystemController.text = session.ecosystem;
       _observerController.text = session.observer;
       _notesController.text = session.notes;
+      _weatherController.text = session.weather;
+      _tempController.text = session.temperature.toString();
+      _humController.text = session.humidity.toString();
+      _methodController.text = session.methodology;
+      _lat = session.latitude;
+      _lon = session.longitude;
+      _alt = session.altitude;
 
       try {
         final List<dynamic> spMaps = jsonDecode(session.speciesJson);
@@ -81,6 +111,13 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
       ecosystem: _ecosystemController.text,
       observer: _observerController.text,
       notes: _notesController.text,
+      weather: _weatherController.text,
+      temperature: double.tryParse(_tempController.text) ?? 0.0,
+      humidity: double.tryParse(_humController.text) ?? 0.0,
+      methodology: _methodController.text,
+      latitude: _lat,
+      longitude: _lon,
+      altitude: _alt,
       speciesJson: jsonEncode(_speciesList.map((s) => s.toMap()).toList()),
       generalPhotosJson: jsonEncode(_generalPhotos.map((p) => p.toMap()).toList()),
     );
@@ -105,12 +142,15 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
       body: Stepper(
         type: StepperType.vertical,
         currentStep: _currentStep,
-        onStepContinue: () {
+      onStepContinue: () async {
           if (_currentStep < 4) {
             setState(() => _currentStep++);
           } else {
-            provider.saveSamplingSession(_buildCompiledSession());
+          await provider.saveSamplingSession(_buildCompiledSession());
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sesión guardada exitosamente')));
             setState(() => _activeSession = null);
+          }
           }
         },
         onStepCancel: () {
@@ -123,7 +163,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
           Step(title: const Text('Ubicación y Sitio'), isActive: _currentStep >= 1, content: _buildSiteStep()),
           Step(title: const Text('Inventario de Especies'), isActive: _currentStep >= 2, content: _buildSpeciesStep()),
           Step(title: const Text('Registro Fotográfico'), isActive: _currentStep >= 3, content: _buildGalleryStep()),
-          Step(title: const Text('Finalizar y Compilar'), isActive: _currentStep >= 4, content: _buildReportStep()),
+          Step(title: const Text('Finalizar y Compilar'), isActive: _currentStep >= 4, content: _buildReportStep(provider)),
         ],
       ),
     );
@@ -141,14 +181,85 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
 
   Widget _buildSiteStep() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(controller: _locationController, decoration: const InputDecoration(labelText: 'Localidad')),
         TextField(controller: _ecosystemController, decoration: const InputDecoration(labelText: 'Ecosistema')),
+        const SizedBox(height: 16),
+        const Text('Georreferenciación', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        Row(
+          children: [
+            Expanded(child: Text('GPS: ${_lat.toStringAsFixed(4)}, ${_lon.toStringAsFixed(4)} (${_alt.toInt()}m)', style: const TextStyle(fontSize: 11))),
+            IconButton(
+              icon: const Icon(Icons.my_location, color: Colors.green),
+              onPressed: () async {
+                final pos = await LocationService.getCurrentLocation();
+                if (pos != null) {
+                  setState(() {
+                    _lat = pos.latitude;
+                    _lon = pos.longitude;
+                    _alt = pos.altitude;
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+        const Divider(),
+        const Text('Variables Ambientales', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+        Row(
+          children: [
+            Expanded(child: TextField(controller: _weatherController, decoration: const InputDecoration(labelText: 'Clima'))),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: _tempController, decoration: const InputDecoration(labelText: 'Temp (°C)'), keyboardType: TextInputType.number)),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(child: TextField(controller: _humController, decoration: const InputDecoration(labelText: 'Humedad (%)'), keyboardType: TextInputType.number)),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(controller: _methodController, decoration: const InputDecoration(labelText: 'Metodología'))),
+          ],
+        ),
         const SizedBox(height: 12),
         TextField(controller: _observerController, decoration: const InputDecoration(labelText: 'Observador')),
         TextField(controller: _notesController, decoration: const InputDecoration(labelText: 'Notas Generales'), maxLines: 2),
       ],
     );
+  }
+
+  String? _editingFamily;
+  void _startEditingSpecies(int index) {
+    final sp = _speciesList[index];
+    _spCommonNameController.text = sp.commonName;
+    _spScientificNameController.text = sp.name;
+    _spCountController.text = sp.count.toString();
+    _spBehaviorController.text = sp.behavior;
+    _spSexAgeController.text = sp.sexAge;
+    _spNotesController.text = sp.notes;
+    _editingFamily = sp.family;
+    setState(() => _editingSpeciesIndex = index);
+  }
+
+  void _saveCurrentSpecies() {
+    if (_editingSpeciesIndex == null) return;
+    final index = _editingSpeciesIndex!;
+    final sp = _speciesList[index];
+    setState(() {
+      _speciesList[index] = SessionSpecies(
+        id: sp.id,
+        family: _editingFamily ?? sp.family,
+        name: _spScientificNameController.text,
+        commonName: _spCommonNameController.text,
+        count: int.tryParse(_spCountController.text) ?? 1,
+        behavior: _spBehaviorController.text,
+        sexAge: _spSexAgeController.text,
+        notes: _spNotesController.text,
+        photos: sp.photos,
+        audioPath: sp.audioPath,
+      );
+      _editingSpeciesIndex = null;
+    });
   }
 
   Widget _buildSpeciesStep() {
@@ -164,14 +275,12 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
             Text('Aves Registradas (${_speciesList.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
             ElevatedButton.icon(
               onPressed: () {
-                setState(() {
-                  _speciesList.add(SessionSpecies(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    family: SpeciesCatalog.families.first,
-                    name: "",
-                  ));
-                  _editingSpeciesIndex = _speciesList.length - 1;
-                });
+                _speciesList.add(SessionSpecies(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  family: SpeciesCatalog.families.first,
+                  name: "",
+                ));
+                _startEditingSpecies(_speciesList.length - 1);
               },
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Agregar'),
@@ -190,11 +299,11 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
     return Card(
       child: ListTile(
         title: Text(sp.commonName.isEmpty ? 'Sin nombre' : sp.commonName),
-        subtitle: Text('${sp.name} • ${sp.family}', style: const TextStyle(fontSize: 11)),
+        subtitle: Text('${sp.name} • ${sp.family}\nCant: ${sp.count} • ${sp.sexAge}', style: const TextStyle(fontSize: 11)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => setState(() => _editingSpeciesIndex = index)),
+            IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _startEditingSpecies(index)),
             IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setState(() => _speciesList.removeAt(index))),
           ],
         ),
@@ -207,14 +316,22 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Editar Especie', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Editar Especie', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+            TextButton(onPressed: () => setState(() => _editingSpeciesIndex = null), child: const Text('Cancelar', style: TextStyle(color: Colors.grey, fontSize: 12))),
+          ],
+        ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: sp.family,
+          value: _editingFamily,
           items: SpeciesCatalog.families.map((f) => DropdownMenuItem(value: f, child: Text(f, style: const TextStyle(fontSize: 12)))).toList(),
-          onChanged: (v) => setState(() => _speciesList[index] = SessionSpecies(
-            id: sp.id, family: v!, name: "", commonName: "", count: sp.count, behavior: sp.behavior, photos: sp.photos, audioPath: sp.audioPath, notes: sp.notes, sexAge: sp.sexAge
-          )),
+          onChanged: (v) {
+            setState(() {
+              _editingFamily = v;
+            });
+          },
           decoration: const InputDecoration(labelText: 'Familia'),
         ),
         const SizedBox(height: 12),
@@ -222,11 +339,21 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
         const SizedBox(height: 12),
         TextField(
           decoration: const InputDecoration(labelText: 'Nombre Común'),
-          onChanged: (v) => _speciesList[index] = SessionSpecies(
-            id: sp.id, family: sp.family, name: sp.name, commonName: v, count: sp.count, behavior: sp.behavior, photos: sp.photos, audioPath: sp.audioPath, notes: sp.notes, sexAge: sp.sexAge
-          ),
-          controller: TextEditingController(text: sp.commonName)..selection = TextSelection.collapsed(offset: sp.commonName.length),
+          controller: _spCommonNameController,
         ),
+        TextField(
+          decoration: const InputDecoration(labelText: 'Nombre Científico'),
+          controller: _spScientificNameController,
+        ),
+        Row(
+          children: [
+            Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Cantidad'), controller: _spCountController, keyboardType: TextInputType.number)),
+            const SizedBox(width: 8),
+            Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Sexo/Edad'), controller: _spSexAgeController)),
+          ],
+        ),
+        TextField(decoration: const InputDecoration(labelText: 'Comportamiento'), controller: _spBehaviorController),
+        TextField(decoration: const InputDecoration(labelText: 'Notas'), controller: _spNotesController, maxLines: 2),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -251,7 +378,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => setState(() => _editingSpeciesIndex = null),
+                onPressed: _saveCurrentSpecies,
                 icon: const Icon(Icons.check, size: 16),
                 label: const Text('Guardar'),
               ),
@@ -312,14 +439,15 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
     if (res.contains('|')) {
       final parts = res.split('|');
       setState(() {
-        _speciesList[index] = SessionSpecies(
-          id: sp.id,
-          family: parts.length > 2 ? parts[2].trim() : sp.family,
-          name: parts.length > 1 ? parts[1].trim() : sp.name,
-          commonName: parts[0].trim(),
-          notes: parts.length > 3 ? parts[3].trim() : sp.notes,
-          count: sp.count, behavior: sp.behavior, photos: sp.photos, audioPath: sp.audioPath, sexAge: sp.sexAge
-        );
+        final common = parts[0].trim();
+        final scientific = parts.length > 1 ? parts[1].trim() : _spScientificNameController.text;
+        final family = parts.length > 2 ? parts[2].trim() : _editingFamily;
+        final notes = parts.length > 3 ? parts[3].trim() : _spNotesController.text;
+
+        _spCommonNameController.text = common;
+        _spScientificNameController.text = scientific;
+        _spNotesController.text = notes;
+        _editingFamily = family;
       });
     }
   }
@@ -354,7 +482,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
     );
   }
 
-  Widget _buildReportStep() {
+  Widget _buildReportStep(BirdProvider provider) {
     return Column(
       children: [
         const Icon(Icons.check_circle, color: Colors.green, size: 64),
@@ -366,6 +494,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
           child: FilledButton.icon(
             onPressed: () async {
               final compiled = _buildCompiledSession();
+              await provider.saveSamplingSession(compiled);
               final file = await ReportService.generateSessionZip(
                 session: compiled,
                 speciesList: _speciesList,
@@ -374,7 +503,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
               Share.shareXFiles([XFile(file.path)], text: 'Paquete de Muestreo');
             },
             icon: const Icon(Icons.download),
-            label: const Text('Generar PDF + ZIP'),
+            label: const Text('Guardar y Generar PDF + ZIP'),
           ),
         )
       ],
@@ -408,6 +537,13 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
             _ecosystemController.text = "";
             _observerController.text = "";
             _notesController.text = "";
+            _weatherController.text = "";
+            _tempController.text = "0";
+            _humController.text = "0";
+            _methodController.text = "";
+            _lat = 0;
+            _lon = 0;
+            _alt = 0;
           });
         },
         label: const Text('Nueva Sesión'),
