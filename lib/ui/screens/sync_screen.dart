@@ -27,6 +27,8 @@ class _SyncScreenState extends State<SyncScreen> {
             const Text('Central de Sincronización', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
             const Text('Carga tus datos de forma incremental.', style: TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 16),
+            _buildGoogleAccount(provider),
+            const SizedBox(height: 16),
             _buildSyncControl(context, provider),
             const SizedBox(height: 24),
             const Text('Historial de Transacciones', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -38,8 +40,26 @@ class _SyncScreenState extends State<SyncScreen> {
     );
   }
 
+  Widget _buildGoogleAccount(BirdProvider provider) {
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.red.shade100,
+          child: const Icon(Icons.account_circle, color: Colors.red),
+        ),
+        title: Text(provider.googleUser?.displayName ?? 'No autenticado'),
+        subtitle: Text(provider.googleUser?.email ?? 'Inicia sesión con Google para sincronizar'),
+        trailing: provider.googleUser == null
+            ? TextButton(onPressed: () => provider.loginWithGoogle(), child: const Text('Conectar'))
+            : TextButton(onPressed: () => provider.logoutFromGoogle(), child: const Text('Salir')),
+      ),
+    );
+  }
+
   Widget _buildSyncControl(BuildContext context, BirdProvider provider) {
     final theme = Theme.of(context);
+    final bool isReady = provider.selectedProject != null && provider.googleUser != null;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -57,8 +77,18 @@ class _SyncScreenState extends State<SyncScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(20)),
-                  child: const Text('VINCULADO', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green)),
+                  decoration: BoxDecoration(
+                    color: provider.googleUser != null ? Colors.green.shade50 : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    provider.googleUser != null ? 'VINCULADO' : 'DESCONECTADO',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: provider.googleUser != null ? Colors.green : Colors.red,
+                    ),
+                  ),
                 )
               ],
             ),
@@ -78,7 +108,7 @@ class _SyncScreenState extends State<SyncScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: provider.selectedProject == null ? null : () => provider.performIncrementalSync(),
+                  onPressed: !isReady ? null : () => provider.performIncrementalSync(),
                   icon: const Icon(Icons.sync),
                   label: const Text('Iniciar Sincronización'),
                 ),
@@ -86,8 +116,13 @@ class _SyncScreenState extends State<SyncScreen> {
             if (provider.selectedProject == null)
               const Padding(
                 padding: EdgeInsets.only(top: 8.0),
-                child: Text('Selecciona un proyecto en Muestreos para sincronizar.', style: TextStyle(fontSize: 10, color: Colors.red)),
-              )
+                child: Text('⚠️ Selecciona un proyecto en Muestreos.', style: TextStyle(fontSize: 10, color: Colors.orange)),
+              ),
+            if (provider.googleUser == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 4.0),
+                child: Text('⚠️ Debes iniciar sesión con Google.', style: TextStyle(fontSize: 10, color: Colors.red)),
+              ),
           ],
         ),
       ),

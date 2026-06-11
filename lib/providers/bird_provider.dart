@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/models.dart';
 import '../services/bird_repository.dart';
 import '../services/gemini_service.dart';
+import '../services/google_drive_service.dart';
+import '../services/report_service.dart';
 
 class BirdProvider with ChangeNotifier {
   final BirdRepository _repository = BirdRepository();
@@ -47,6 +50,9 @@ class BirdProvider with ChangeNotifier {
   double syncProgress = 0.0;
   String syncLogMessage = "";
 
+  GoogleSignInAccount? _googleUser;
+  GoogleSignInAccount? get googleUser => _googleUser;
+
   BirdProvider() {
     _init();
   }
@@ -55,6 +61,23 @@ class BirdProvider with ChangeNotifier {
     await _repository.prePopulateTemplates();
     await loadAllData();
     fetchArticlesFromAllAboutBirds();
+    _checkGoogleLogin();
+  }
+
+  Future<void> _checkGoogleLogin() async {
+    _googleUser = await GoogleDriveService.signInSilently();
+    notifyListeners();
+  }
+
+  Future<void> loginWithGoogle() async {
+    _googleUser = await GoogleDriveService.signIn();
+    notifyListeners();
+  }
+
+  Future<void> logoutFromGoogle() async {
+    await GoogleDriveService.signOut();
+    _googleUser = null;
+    notifyListeners();
   }
 
   Future<void> loadAllData() async {
@@ -273,13 +296,62 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
 
     await Future.delayed(const Duration(seconds: 1));
-    syncProgress = 0.4;
+    syncProgress = 0.3;
     syncLogMessage = "Validando tokens de sesión Cloud...";
+
+    if (_googleUser == null) {
+      isSyncing = false;
+      syncLogMessage = "Error: No has iniciado sesión con Google.";
+      await _repository.saveSyncLog(SyncLog(
+        action: "Sincronización Cloud",
+        status: "FALLIDO",
+        summary: "Usuario no autenticado en Google.",
+      ));
+      notifyListeners();
+      return;
+    }
+    notifyListeners();
+
+    await Future.delayed(const Duration(seconds: 1));
+    syncProgress = 0.5;
+    syncLogMessage = "Generando reportes para exportación...";
+
+    final projectData = await getProjectFullData(_selectedProject!.id!);
+    final pdfFile = await ReportService.exportProjectToPdf(
+      project: _selectedProject!,
+      sites: projectData['sites'],
+      samplings: projectData['samplings'],
+      observations: projectData['observations'],
+    );
+
+    final csvFile = await ReportService.exportProjectToCsv(
+      project: _selectedProject!,
+      sites: projectData['sites'],
+      samplings: projectData['samplings'],
+      observations: projectData['observations'],
+    );
+
     notifyListeners();
 
     await Future.delayed(const Duration(seconds: 1));
     syncProgress = 0.7;
-    syncLogMessage = "Subiendo registros pendientes...";
+    syncLogMessage = "Subiendo archivos a Google Drive...";
+
+    final pdfSuccess = await GoogleDriveService.uploadFileToDrive(pdfFile, 'Reporte_${_selectedProject!.name}.pdf', mimeType: 'application/pdf');
+    final csvSuccess = await GoogleDriveService.uploadFileToDrive(csvFile, 'Datos_${_selectedProject!.name}.csv', mimeType: 'text/csv');
+
+    if (!pdfSuccess || !csvSuccess) {
+       isSyncing = false;
+       syncLogMessage = "Error al subir archivos a Drive.";
+       await _repository.saveSyncLog(SyncLog(
+         action: "Subida a Drive: ${_selectedProject!.name}",
+         status: "FALLIDO",
+         summary: "Falla en la comunicación con el API de Drive.",
+       ));
+       notifyListeners();
+       return;
+    }
+
     notifyListeners();
 
     await Future.delayed(const Duration(seconds: 1));
@@ -291,7 +363,7 @@ class BirdProvider with ChangeNotifier {
     await _repository.saveSyncLog(SyncLog(
       action: "Subida de Proyecto: ${updatedProject.name}",
       status: "EXITOSO",
-      summary: "Sincronizados correctamente los datos en la nube.",
+      summary: "Sincronizados correctamente los datos en Google Drive.",
     ));
 
     syncProgress = 1.0;
