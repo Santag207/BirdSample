@@ -9,7 +9,7 @@ import '../models/models.dart';
 
 class ReportService {
 
-  // PDF Export for Project
+  // Export Project to PDF
   static Future<File> exportProjectToPdf({
     required Project project,
     required List<Site> sites,
@@ -17,56 +17,99 @@ class ReportService {
     required List<Observation> observations,
   }) async {
     final pdf = pw.Document();
-    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
-
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('BIRD SAMPLE ENGINE', style: pw.TextStyle(fontSize: 14, color: PdfColors.grey600)),
-              pw.SizedBox(height: 20),
-              pw.Text('Informe Técnico de Avifauna', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold, color: PdfColors.green900)),
-              pw.SizedBox(height: 40),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(10),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.green50,
-                  border: pw.Border.all(color: PdfColors.green100, width: 2),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('PROYECTO: ${project.name}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.green900)),
-                    pw.Text('Cliente: ${project.client}'),
-                    pw.Text('Contrato: ${project.contractNumber}'),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 40),
-              pw.Text('Resumen de Monitoreo', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
-              pw.SizedBox(height: 10),
-              pw.Text('Fecha de Reporte: $dateStr'),
-              pw.Text('Sitios Evaluados: ${sites.size}'),
-              pw.Text('Campañas de Muestreo: ${samplings.length}'),
-              pw.Text('Total de Observaciones: ${observations.length}'),
-              pw.Text('Total de Individuos: ${observations.fold(0, (sum, item) => sum + item.quantity)}'),
-            ],
-          );
-        },
+        build: (pw.Context context) => _buildPdfContent(project, sites, samplings, observations),
       ),
     );
-
-    // Save
     final directory = await getTemporaryDirectory();
     final file = File('${directory.path}/Reporte_${project.name.replaceAll(' ', '_')}.pdf');
     await file.writeAsBytes(await pdf.save());
     return file;
   }
 
-  // CSV Export for Project
+  // Export Session to PDF (Public)
+  static Future<File> exportSessionToPdf(SamplingSession session, List<SessionSpecies> speciesList) async {
+    final pdf = pw.Document();
+    pdf.addPage(pw.Page(
+      build: (c) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text('REPORTE DE SESIÓN: ${session.projectName}', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.Text('Autor: ${session.author}'),
+          pw.Text('Localidad: ${session.location}'),
+          pw.Divider(),
+          pw.Text('Especies Registradas:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          ...speciesList.map((s) => pw.Text('- ${s.commonName} (${s.name})')),
+        ]
+      )
+    ));
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/Sesion_${session.projectName.replaceAll(' ', '_')}.pdf');
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
+  // Export Session to CSV (Excel compatible)
+  static Future<File> exportSessionToCsv(SamplingSession session, List<SessionSpecies> speciesList) async {
+    final StringBuffer buffer = StringBuffer();
+    buffer.write('\uFEFF'); // BOM for Excel
+    buffer.writeln('PROYECTO,AUTOR,LOCALIDAD,FECHA');
+    buffer.writeln('"${session.projectName}","${session.author}","${session.location}","${session.date}"');
+    buffer.writeln('');
+    buffer.writeln('FAMILIA,NOMBRE_CIENTIFICO,NOMBRE_COMUN,CANTIDAD');
+    for (var s in speciesList) {
+      buffer.writeln('"${s.family}","${s.name}","${s.commonName}",${s.count}');
+    }
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/Datos_${session.projectName.replaceAll(' ', '_')}.csv');
+    await file.writeAsString(buffer.toString());
+    return file;
+  }
+
+  static pw.Widget _buildPdfContent(Project project, List<Site> sites, List<Sampling> samplings, List<Observation> observations) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('BIRD SAMPLE ENGINE - PROYECTO', style: pw.TextStyle(color: PdfColors.grey600)),
+        pw.SizedBox(height: 10),
+        pw.Text(project.name, style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+        pw.Text('Cliente: ${project.client}'),
+        pw.Divider(),
+        pw.Text('Resumen: ${sites.length} sitios, ${observations.length} observaciones.'),
+      ]
+    );
+  }
+
+  // Session ZIP Export (Full package)
+  static Future<File> generateSessionZip({
+    required SamplingSession session,
+    required List<SessionSpecies> speciesList,
+    required List<SessionPhoto> generalPhotos,
+  }) async {
+    final archive = Archive();
+    final pdfFile = await exportSessionToPdf(session, speciesList);
+    archive.addFile(ArchiveFile('reporte.pdf', pdfFile.lengthSync(), pdfFile.readAsBytesSync()));
+
+    final jsonData = jsonEncode(session.toMap());
+    archive.addFile(ArchiveFile('datos.json', jsonData.length, utf8.encode(jsonData)));
+
+    for (var sp in speciesList) {
+      for (var photo in sp.photos) {
+        final f = File(photo.path);
+        if (await f.exists()) archive.addFile(ArchiveFile('imagenes/${photo.name}', f.lengthSync(), f.readAsBytesSync()));
+      }
+    }
+
+    final zipData = ZipEncoder().encode(archive);
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/Session_${session.id}_Export.zip');
+    if (zipData != null) await file.writeAsBytes(zipData);
+    return file;
+  }
+
   static Future<File> exportProjectToCsv({
     required Project project,
     required List<Site> sites,
@@ -74,99 +117,15 @@ class ReportService {
     required List<Observation> observations,
   }) async {
     final StringBuffer buffer = StringBuffer();
-    // BOM for Excel
     buffer.write('\uFEFF');
-    buffer.writeln('REPORTE BIRD SAMPLE - PROYECTO: ${project.name}');
-    buffer.writeln('Cliente,${project.client}');
-    buffer.writeln('Contrato,${project.contractNumber}');
-    buffer.writeln('');
-
-    buffer.writeln('Sitios Registrados');
-    buffer.writeln('ID,Nombre,Departamento,Municipio,Vereda,Ecosistema,Latitud,Longitud,Altitud');
-    for (var s in sites) {
-      buffer.writeln('${s.id},"${s.name}","${s.department}","${s.municipality}","${s.vereda}","${s.ecosystem}",${s.latitude},${s.longitude},${s.altitude}');
-    }
-    buffer.writeln('');
-
-    buffer.writeln('Campañas de Muestreo');
-    buffer.writeln('ID,SitioID,Observador,Fecha,Clima,Temp,Hum,Metodologia');
-    for (var s in samplings) {
-      final date = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.fromMillisecondsSinceEpoch(s.date));
-      buffer.writeln('${s.id},${s.siteId},"${s.observer}","$date","${s.weather}",${s.temperature},${s.humidity},"${s.methodology}"');
-    }
-    buffer.writeln('');
-
-    buffer.writeln('Inventario de Especies');
-    buffer.writeln('ID,MuestreoID,Nombre Comun,Nombre Cientifico,Familia,Cantidad,Sexo,Edad,Comportamiento,Latitud,Longitud,Altitud,Notas');
+    buffer.writeln('PROYECTO: ${project.name}');
+    buffer.writeln('NOMBRE_COMUN,NOMBRE_CIENTIFICO,CANTIDAD');
     for (var o in observations) {
-      buffer.writeln('${o.id},${o.samplingId},"${o.birdCommonName}","${o.birdScientificName}","${o.birdFamily}",${o.quantity},"${o.sex}","${o.age}","${o.behavior}",${o.latitude},${o.longitude},${o.altitude},"${o.notes.replaceAll('"', '""')}"');
+      buffer.writeln('"${o.birdCommonName}","${o.birdScientificName}",${o.quantity}');
     }
-
     final directory = await getTemporaryDirectory();
     final file = File('${directory.path}/Exportacion_${project.name.replaceAll(' ', '_')}.csv');
     await file.writeAsString(buffer.toString());
     return file;
   }
-
-  // Session ZIP Export (PDF + LaTeX + JSON + Photos)
-  static Future<File> generateSessionZip({
-    required SamplingSession session,
-    required List<SessionSpecies> speciesList,
-    required List<SessionPhoto> generalPhotos,
-  }) async {
-    final archive = Archive();
-
-    // 1. PDF (Simplified for this step)
-    final pdfFile = await _generateSessionPdf(session, speciesList, generalPhotos);
-    archive.addFile(ArchiveFile('reporte.pdf', pdfFile.lengthSync(), pdfFile.readAsBytesSync()));
-
-    // 2. LaTeX
-    final latex = _generateSessionLatex(session, speciesList, generalPhotos);
-    archive.addFile(ArchiveFile('fuentes.tex', latex.length, utf8.encode(latex)));
-
-    // 3. JSON
-    final jsonData = jsonEncode(session.toMap());
-    archive.addFile(ArchiveFile('datos.json', jsonData.length, utf8.encode(jsonData)));
-
-    // 4. Photos
-    for (var sp in speciesList) {
-      for (var photo in sp.photos) {
-        final f = File(photo.path);
-        if (await f.exists()) {
-          archive.addFile(ArchiveFile('imagenes/${photo.name}', f.lengthSync(), f.readAsBytesSync()));
-        }
-      }
-    }
-    for (var photo in generalPhotos) {
-      final f = File(photo.path);
-      if (await f.exists()) {
-        archive.addFile(ArchiveFile('imagenes/${photo.name}', f.lengthSync(), f.readAsBytesSync()));
-      }
-    }
-
-    final zipData = ZipEncoder().encode(archive);
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/Session_${session.id}_Export.zip');
-    if (zipData != null) {
-      await file.writeAsBytes(zipData);
-    }
-    return file;
-  }
-
-  static Future<File> _generateSessionPdf(SamplingSession session, List<SessionSpecies> speciesList, List<SessionPhoto> generalPhotos) async {
-    final pdf = pw.Document();
-    pdf.addPage(pw.Page(build: (c) => pw.Text('Reporte de Sesion: ${session.projectName}')));
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/temp_session.pdf');
-    await file.writeAsBytes(await pdf.save());
-    return file;
-  }
-
-  static String _generateSessionLatex(SamplingSession session, List<SessionSpecies> speciesList, List<SessionPhoto> generalPhotos) {
-    return "% LaTeX Template for Bird Session\n\\documentclass{article}\n\\begin{document}\nSesion: ${session.projectName}\n\\end{document}";
-  }
-}
-
-extension ListSize on List {
-  int get size => length;
 }

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
-import 'project_list_screen.dart';
+import 'field_data_screen.dart';
 import 'sync_screen.dart';
 import 'gemini_assistant_screen.dart';
-import 'sampling_wizard_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -17,8 +16,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const SamplingWizardScreen(), // Wizard/History Tab
-    const ProjectListScreen(), // Monitoring/Project Tab
+    const FieldDataScreen(), // Combined Proyectos & Sesiones
     const SyncScreen(),
     const GeminiAssistantScreen(),
   ];
@@ -44,19 +42,14 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Inicio',
           ),
           NavigationDestination(
-            icon: Icon(Icons.eco_outlined),
-            selectedIcon: Icon(Icons.eco),
-            label: 'Sesiones',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.assignment_outlined),
-            selectedIcon: Icon(Icons.assignment),
-            label: 'Muestreos',
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'Mis Datos',
           ),
           NavigationDestination(
             icon: Icon(Icons.cloud_sync_outlined),
             selectedIcon: Icon(Icons.cloud_sync),
-            label: 'Sincronizar',
+            label: 'Sync',
           ),
           NavigationDestination(
             icon: Icon(Icons.auto_awesome_outlined),

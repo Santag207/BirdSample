@@ -24,7 +24,6 @@ class BirdProvider with ChangeNotifier {
   bool _isRefreshingArticles = false;
   bool get isRefreshingArticles => _isRefreshingArticles;
 
-  // Selection context
   Project? _selectedProject;
   Site? _selectedSite;
   Sampling? _selectedSampling;
@@ -41,7 +40,6 @@ class BirdProvider with ChangeNotifier {
   List<Sampling> get selectedSiteSamplings => _selectedSiteSamplings;
   List<Observation> get selectedSamplingObservations => _selectedSamplingObservations;
 
-  // UI state
   final Map<String, String> dynamicAnswers = {};
   String aiResponse = "";
   bool aiLoading = false;
@@ -67,6 +65,28 @@ class BirdProvider with ChangeNotifier {
     _allObservations = await _repository.getAllObservations();
     _birdArticles = await _repository.getAllArticles();
     notifyListeners();
+  }
+
+  // Helper to gather all data for a report
+  Future<Map<String, dynamic>> getProjectFullData(int projectId) async {
+    final sites = await _repository.getSitesForProject(projectId);
+    List<Sampling> allSamplings = [];
+    List<Observation> allObservations = [];
+    
+    for (var site in sites) {
+      final samplings = await _repository.getSamplingsForSite(site.id!);
+      allSamplings.addAll(samplings);
+      for (var sampling in samplings) {
+        final observations = await _repository.getObservationsForSampling(sampling.id!);
+        allObservations.addAll(observations);
+      }
+    }
+    
+    return {
+      'sites': sites,
+      'samplings': allSamplings,
+      'observations': allObservations,
+    };
   }
 
   void selectProject(Project? project) async {
@@ -104,7 +124,6 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Projects CRUD
   Future<void> createProject(String name, String client, String contract, String desc) async {
     final project = Project(name: name, client: client, contractNumber: contract, description: desc);
     await _repository.saveProject(project);
@@ -117,7 +136,6 @@ class BirdProvider with ChangeNotifier {
     await loadAllData();
   }
 
-  // Sites
   Future<void> createSite(String name, String dept, String mun, String vereda, String eco, double lat, double lon, double alt) async {
     if (_selectedProject == null) return;
     final site = Site(
@@ -145,7 +163,6 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Samplings
   Future<void> startSampling(String observer, String weather, double temp, double hum, String method) async {
     if (_selectedSite == null) return;
     final sampling = Sampling(
@@ -187,7 +204,6 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Observations
   Future<void> addObservation(Observation obs) async {
     await _repository.saveObservation(obs);
     if (_selectedSampling != null) {
@@ -206,7 +222,6 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Sessions
   Future<void> saveSamplingSession(SamplingSession session) async {
     await _repository.saveSession(session);
     await loadAllData();
@@ -217,7 +232,6 @@ class BirdProvider with ChangeNotifier {
     await loadAllData();
   }
 
-  // AI Actions
   Future<void> searchBirdWithGemini(String feathers, String beak, String habitat) async {
     aiLoading = true;
     aiResponse = "Consultando con la base de datos experta de avifauna...";
@@ -241,7 +255,6 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // RSS
   Future<void> fetchArticlesFromAllAboutBirds() async {
     _isRefreshingArticles = true;
     notifyListeners();
@@ -251,7 +264,6 @@ class BirdProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Sync Simulation
   Future<void> performIncrementalSync() async {
     if (_selectedProject == null || isSyncing) return;
 

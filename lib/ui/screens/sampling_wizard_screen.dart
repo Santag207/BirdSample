@@ -25,7 +25,6 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
   List<SessionPhoto> _generalPhotos = [];
   int? _editingSpeciesIndex;
 
-  // Controllers
   final _projectController = TextEditingController();
   final _authorController = TextEditingController();
   final _institutionController = TextEditingController();
@@ -74,7 +73,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
   }
 
   SamplingSession _buildCompiledSession() {
-    return _activeSession!.copyWith(
+    return (_activeSession ?? SamplingSession()).copyWith(
       projectName: _projectController.text,
       author: _authorController.text,
       institution: _institutionController.text,
@@ -104,7 +103,7 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
         ),
       ),
       body: Stepper(
-        type: StepperType.horizontal,
+        type: StepperType.vertical,
         currentStep: _currentStep,
         onStepContinue: () {
           if (_currentStep < 4) {
@@ -120,17 +119,15 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
           }
         },
         steps: [
-          Step(title: const Text('Dossier'), isActive: _currentStep >= 0, content: _buildDossierStep()),
-          Step(title: const Text('Sitio'), isActive: _currentStep >= 1, content: _buildSiteStep()),
-          Step(title: const Text('Especies'), isActive: _currentStep >= 2, content: _buildSpeciesStep()),
-          Step(title: const Text('Galería'), isActive: _currentStep >= 3, content: _buildGalleryStep()),
-          Step(title: const Text('Reporte'), isActive: _currentStep >= 4, content: _buildReportStep()),
+          Step(title: const Text('Dossier del Proyecto'), isActive: _currentStep >= 0, content: _buildDossierStep()),
+          Step(title: const Text('Ubicación y Sitio'), isActive: _currentStep >= 1, content: _buildSiteStep()),
+          Step(title: const Text('Inventario de Especies'), isActive: _currentStep >= 2, content: _buildSpeciesStep()),
+          Step(title: const Text('Registro Fotográfico'), isActive: _currentStep >= 3, content: _buildGalleryStep()),
+          Step(title: const Text('Finalizar y Compilar'), isActive: _currentStep >= 4, content: _buildReportStep()),
         ],
       ),
     );
   }
-
-  // --- UI STEPS ---
 
   Widget _buildDossierStep() {
     return Column(
@@ -307,7 +304,6 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
       return;
     }
 
-    // Simulate AI Call
     final res = await GeminiService.askGeminiMultimodal(
       "Identifica esta ave de Colombia. Devuelve: Nombre Común|Nombre Científico|Familia|Razón",
       images: [File(sp.photos.first.path)],
@@ -388,7 +384,6 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
   Widget _buildHistoryView(BuildContext context, BirdProvider provider) {
     final sessions = provider.sessions;
     return Scaffold(
-      appBar: AppBar(title: const Text('Sesiones de Campo')),
       body: sessions.isEmpty
           ? const Center(child: Text('No hay sesiones registradas'))
           : ListView.builder(
@@ -424,17 +419,144 @@ class _SamplingWizardScreenState extends State<SamplingWizardScreen> {
   Widget _buildSessionCard(BuildContext context, BirdProvider provider, SamplingSession session) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        title: Text(session.projectName),
-        subtitle: Text('Fecha: ${session.date}\nObservador: ${session.observer}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () => _showSessionSummary(context, session),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(session.projectName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('Fecha: ${session.date}\nObservador: ${session.observer}', style: const TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.info_outline, color: Colors.green),
+              ),
+              const Divider(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _showDownloadMenu(context, session),
+                    icon: const Icon(Icons.download, size: 18),
+                    label: const Text('Exportar', style: TextStyle(fontSize: 12)),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _loadSession(session),
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Editar', style: TextStyle(fontSize: 12)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                    onPressed: () => provider.deleteSamplingSession(session.id!),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSessionSummary(BuildContext context, SamplingSession session) {
+    List<SessionSpecies> sps = [];
+    try { sps = (jsonDecode(session.speciesJson) as List).map((e) => SessionSpecies.fromMap(e)).toList(); } catch (_) {}
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (_, scrollController) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(20),
           children: [
-            IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), onPressed: () => provider.deleteSamplingSession(session.id!)),
-            const Icon(Icons.chevron_right),
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey, borderRadius: BorderRadius.all(Radius.circular(2))))),
+            const SizedBox(height: 20),
+            Text(session.projectName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            _summaryRow(Icons.person, 'Autor', session.author),
+            _summaryRow(Icons.business, 'Institución', session.institution),
+            _summaryRow(Icons.location_on, 'Ubicación', session.location),
+            _summaryRow(Icons.eco, 'Ecosistema', session.ecosystem),
+            const Divider(height: 30),
+            Text('Especies Registradas (${sps.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            ...sps.map((s) => ListTile(
+              dense: true,
+              title: Text(s.commonName),
+              subtitle: Text('${s.name} (${s.family})'),
+              trailing: Text('Cant: ${s.count}'),
+            )),
+            const SizedBox(height: 20),
+            Text('Notas: ${session.notes}', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
           ],
         ),
-        onTap: () => _loadSession(session),
+      ),
+    );
+  }
+
+  Widget _summaryRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.green),
+          const SizedBox(width: 8),
+          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+
+  void _showDownloadMenu(BuildContext context, SamplingSession session) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Exportar Datos de Sesión', style: TextStyle(fontWeight: FontWeight.bold))),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              title: const Text('Documento PDF'),
+              onTap: () async {
+                Navigator.pop(context);
+                final sps = (jsonDecode(session.speciesJson) as List).map((e) => SessionSpecies.fromMap(e)).toList();
+                final file = await ReportService.exportSessionToPdf(session, sps);
+                Share.shareXFiles([XFile(file.path)], text: 'Reporte PDF');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.grid_on, color: Colors.green),
+              title: const Text('Excel / CSV'),
+              onTap: () async {
+                Navigator.pop(context);
+                final sps = (jsonDecode(session.speciesJson) as List).map((e) => SessionSpecies.fromMap(e)).toList();
+                final file = await ReportService.exportSessionToCsv(session, sps);
+                Share.shareXFiles([XFile(file.path)], text: 'Datos CSV');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.archive, color: Colors.blue),
+              title: const Text('Paquete ZIP (Todo)'),
+              onTap: () async {
+                Navigator.pop(context);
+                final sps = (jsonDecode(session.speciesJson) as List).map((e) => SessionSpecies.fromMap(e)).toList();
+                final photos = (jsonDecode(session.generalPhotosJson) as List).map((e) => SessionPhoto.fromMap(e)).toList();
+                final file = await ReportService.generateSessionZip(session: session, speciesList: sps, generalPhotos: photos);
+                Share.shareXFiles([XFile(file.path)], text: 'Paquete Completo');
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
