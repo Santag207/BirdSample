@@ -302,12 +302,6 @@
       "languageVersion": "3.9"
     },
     {
-      "name": "google_generative_ai",
-      "rootUri": "file:///home/jules/.pub-cache/hosted/pub.dev/google_generative_ai-0.4.7",
-      "packageUri": "lib/",
-      "languageVersion": "3.1"
-    },
-    {
       "name": "google_identity_services_web",
       "rootUri": "file:///home/jules/.pub-cache/hosted/pub.dev/google_identity_services_web-0.3.3+1",
       "packageUri": "lib/",
