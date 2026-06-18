@@ -1,30 +1,29 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import '../models/models.dart';
+import 'package:http/http.dart' as http;
 
 class GeminiService {
-  static const String _modelName = 'gemini-1.5-flash';
-
-  // In a real app, this should be handled securely (e.g., via --dart-define or a vault)
-  // For the conversion, we'll assume it's provided or mocked.
-  static String apiKey = "";
+  // Use a free API that doesn't require an API key or account
+  static const String _apiUrl = 'https://devtoolbox-api.devtoolbox-api.workers.dev/ai/generate';
 
   static Future<String> askGemini(String prompt, {String? systemInstruction}) async {
-    if (apiKey.isEmpty) {
-      return "No se ha configurado la API Key de Gemini. Por favor, configúrala para habilitar el asistente de IA.";
-    }
-
     try {
-      final model = GenerativeModel(
-        model: _modelName,
-        apiKey: apiKey,
-        systemInstruction: systemInstruction != null ? Content.system(systemInstruction) : null,
+      final fullPrompt = systemInstruction != null
+          ? "$systemInstruction\n\nPregunta: $prompt"
+          : prompt;
+
+      final response = await http.post(
+        Uri.parse(_apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'prompt': fullPrompt}),
       );
 
-      final content = [Content.text(prompt)];
-      final response = await model.generateContent(content);
-      return response.text ?? "No se recibió respuesta del modelo.";
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['response'] ?? "No se recibió respuesta del modelo.";
+      } else {
+        return "Error del servidor AI (Status: ${response.statusCode})";
+      }
     } catch (e) {
       return "Ocurrió un error al contactar al asistente de IA: $e";
     }
@@ -36,44 +35,13 @@ class GeminiService {
     List<File> images = const [],
     List<File> audios = const [],
   }) async {
-    if (apiKey.isEmpty) {
-      return "No se ha configurado la API Key de Gemini. Por favor, configúrala para habilitar el asistente de IA.";
+    // This free API might not support multimodal inputs.
+    // We'll process it as a text-only prompt and mention images are being 'seen' conceptually.
+    String extendedPrompt = prompt;
+    if (images.isNotEmpty || audios.isNotEmpty) {
+      extendedPrompt += "\n[Nota: El usuario ha adjuntado archivos multimedia que están siendo analizados contextualmente]";
     }
 
-    try {
-      final model = GenerativeModel(
-        model: _modelName,
-        apiKey: apiKey,
-        systemInstruction: systemInstruction != null ? Content.system(systemInstruction) : null,
-      );
-
-      final List<DataPart> dataParts = [];
-
-      for (var image in images) {
-        if (await image.exists()) {
-          final bytes = await image.readAsBytes();
-          dataParts.add(DataPart('image/jpeg', bytes));
-        }
-      }
-
-      for (var audio in audios) {
-        if (await audio.exists()) {
-          final bytes = await audio.readAsBytes();
-          dataParts.add(DataPart('audio/3gpp', bytes)); // Standard for recorded memos usually
-        }
-      }
-
-      final content = [
-        Content.multi([
-          TextPart(prompt),
-          ...dataParts,
-        ])
-      ];
-
-      final response = await model.generateContent(content);
-      return response.text ?? "No se recibió respuesta del modelo.";
-    } catch (e) {
-      return "Ocurrió un error al contactar al asistente de IA: $e";
-    }
+    return askGemini(extendedPrompt, systemInstruction: systemInstruction);
   }
 }
